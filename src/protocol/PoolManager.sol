@@ -187,7 +187,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
                 IERC20Metadata(address(poolManagerConfig.FBTC0)).decimals(),
                 poolManagerConfig.FBTCOracle.decimals()
             ) >= amount,
-            "Exceed claimBTC limit"
+            "Requested amount exceeds allowable liquiditionThreshold"
         );
 
         userPoolReserveInformation.collateral -= amount;
@@ -355,6 +355,8 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
             storage userPoolReserveInformation = _userPoolReserveInformation[
                 user
             ];
+        DataTypes.PoolManagerReserveInformation
+            storage poolManagerReserveInformation = _poolManagerReserveInformation;
 
         (uint256 feeForPool, uint256 feeForProtocol) = calculateAccumulatedDebt(
             userPoolReserveInformation.debt,
@@ -366,6 +368,8 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
         userPoolReserveInformation.timeStampIndex = uint40(block.timestamp);
         userPoolReserveInformation.debt += feeForPool + feeForProtocol;
         userPoolReserveInformation.debtToProtocol += feeForProtocol;
+        poolManagerReserveInformation.debt += feeForPool + feeForProtocol;
+
         _protocolProfitUnclaimed += feeForProtocol;
         _protocolProfitAccumulate += feeForProtocol;
     }
