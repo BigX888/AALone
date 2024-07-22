@@ -22,7 +22,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * - The caller must have the POOL_ADMIN_ROLE.
      * - The pool must not have been initialized.
      */
-    function createPool(address user) external onlyOwner {
+    function createPool(address user) external whenNotPaused onlyOwner {
         DataTypes.PoolManagerConfig
             memory poolManagerConfig = _poolManagerConfig;
         DataTypes.UserPoolConfig storage userPoolConfig = _userPoolConfig[user];
@@ -45,7 +45,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * Requirements:
      * - The pool must have been initialized.
      */
-    function supply(uint256 amount) external onlyInitializedPool {
+    function supply(uint256 amount) external whenNotPaused onlyInitializedPool {
         DataTypes.PoolManagerConfig
             memory poolManagerConfig = _poolManagerConfig;
         DataTypes.UserPoolReserveInformation
@@ -75,7 +75,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * - The pool must have been initialized.
      * - The requested amount must not exceed the allowable loan-to-value ratio.
      */
-    function borrow(uint256 amount) external onlyInitializedPool {
+    function borrow(uint256 amount) external whenNotPaused onlyInitializedPool {
         updateState(msg.sender);
 
         DataTypes.PoolManagerConfig
@@ -115,7 +115,9 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * Requirements:
      * - The pool must have been initialized.
      */
-    function repay(uint256 amount) external payable onlyInitializedPool {
+    function repay(
+        uint256 amount
+    ) external payable whenNotPaused onlyInitializedPool {
         updateState(msg.sender);
 
         DataTypes.PoolManagerConfig
@@ -162,7 +164,9 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * - The pool must have been initialized.
      * - The requested amount must not exceed the maximum allowable claimBTC amount.
      */
-    function withdraw(uint256 amount) external onlyInitializedPool {
+    function withdraw(
+        uint256 amount
+    ) external whenNotPaused onlyInitializedPool {
         updateState(msg.sender);
 
         DataTypes.PoolManagerConfig
@@ -211,7 +215,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
         address user,
         uint256 collateralDecrease,
         uint256 debtDecrease
-    ) external onlyOwner {
+    ) external whenNotPaused onlyOwner {
         updateState(user);
 
         DataTypes.PoolManagerConfig
@@ -240,7 +244,9 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * - The pool must have been initialized.
      * - The amount to claimUSDT must not exceed the claimableUSDT amount.
      */
-    function claimUSDT(uint256 amount) external onlyInitializedPool {
+    function claimUSDT(
+        uint256 amount
+    ) external whenNotPaused onlyInitializedPool {
         DataTypes.PoolManagerConfig
             memory poolManagerConfig = _poolManagerConfig;
         DataTypes.UserPoolReserveInformation
@@ -270,7 +276,9 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * Requirements:
      * - The pool must have been initialized.
      */
-    function claimBTC(uint256 amount) external onlyInitializedPool {
+    function claimBTC(
+        uint256 amount
+    ) external whenNotPaused onlyInitializedPool {
         DataTypes.PoolManagerConfig
             memory poolManagerConfig = _poolManagerConfig;
         DataTypes.UserPoolReserveInformation
@@ -297,7 +305,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * Requirements:
      * - The caller must have the POOL_ADMIN_ROLE.
      */
-    function claimProtocolEarnings() external onlyOwner {
+    function claimProtocolEarnings() external whenNotPaused onlyOwner {
         DataTypes.PoolManagerConfig
             memory poolManagerConfig = _poolManagerConfig;
         uint256 claimAmount = poolManagerConfig.USDT.balanceOf(address(this));
@@ -315,7 +323,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
         uint256 amount,
         bytes32 depositTxid,
         uint256 outputIndex
-    ) external {
+    ) external whenNotPaused {
         DataTypes.PoolManagerConfig
             memory poolManagerConfig = _poolManagerConfig;
 
@@ -338,7 +346,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
     function setUserPoolConfig(
         address user,
         DataTypes.UserPoolConfig calldata configInput
-    ) external override onlyOwner {
+    ) external override whenNotPaused onlyOwner {
         updateState(user);
         _userPoolConfig[user] = configInput;
     }

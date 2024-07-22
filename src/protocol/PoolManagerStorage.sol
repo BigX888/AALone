@@ -10,6 +10,7 @@ import "./library/type/DataTypes.sol";
 contract PoolManagerStorage {
     uint256 public constant DENOMINATOR = 10000;
 
+    address internal _emergencyController;
     // Unclaimed protocol profit
     uint256 internal _protocolProfitUnclaimed;
 

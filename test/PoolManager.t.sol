@@ -31,7 +31,10 @@ contract PoolManagerTest is Test {
     address public oracleOwner = address(0x002);
     address public avalonUSDTVault = address(0x003);
     address public antaphaUSDTVault = address(0x004);
+    address public emergencyContoller = address(0x005);
     address public user = address(0x010);
+
+    error EnforcedPause();
 
     function setUp() public {
         vm.startPrank(poolAdmin);
@@ -53,12 +56,20 @@ contract PoolManagerTest is Test {
         poolManager = new PoolManager();
         poolManager.initialize(poolAdmin);
         poolManager.setPoolManagerConfig(config);
+        poolManager.setEmergencyController(emergencyContoller);
         vm.stopPrank();
     }
 
     function testCreatePool_Failed() public {
         // Ensure non-admin cannot create a pool
         address nonAdmin = address(0x123);
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.createPool(user);
+        poolManager.unpause();
+        vm.stopPrank();
+
         vm.prank(nonAdmin);
         vm.expectRevert();
         poolManager.createPool(user);
@@ -119,6 +130,13 @@ contract PoolManagerTest is Test {
         // Approve the PoolManager to spend the tokens
         mockFBTC0.approve(address(poolManager), amount);
 
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.supply(amount);
+        poolManager.unpause();
+        vm.stopPrank();
+
         // Attempt to supply tokens to the pool without initialization
         vm.expectRevert("Pool not initialized");
         poolManager.supply(amount);
@@ -164,6 +182,13 @@ contract PoolManagerTest is Test {
         uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
+
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.borrow(borrowAmount);
+        poolManager.unpause();
+        vm.stopPrank();
 
         vm.prank(user);
         vm.expectRevert("Pool not initialized");
@@ -220,6 +245,13 @@ contract PoolManagerTest is Test {
         uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
+
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.claimUSDT(borrowAmount);
+        poolManager.unpause();
+        vm.stopPrank();
 
         vm.prank(user);
         vm.expectRevert("Pool not initialized");
@@ -280,6 +312,13 @@ contract PoolManagerTest is Test {
         uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
+
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.repay(1);
+        poolManager.unpause();
+        vm.stopPrank();
 
         vm.startPrank(avalonUSDTVault);
         mockUSDT.mint(avalonUSDTVault, borrowAmount);
@@ -366,6 +405,13 @@ contract PoolManagerTest is Test {
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
 
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.liquidate(user, supplyAmount, borrowAmount);
+        poolManager.unpause();
+        vm.stopPrank();
+
         vm.startPrank(avalonUSDTVault);
         mockUSDT.mint(avalonUSDTVault, borrowAmount);
         mockUSDT.approve(address(poolManager), borrowAmount);
@@ -451,6 +497,13 @@ contract PoolManagerTest is Test {
         uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
+
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.withdraw(supplyAmount);
+        poolManager.unpause();
+        vm.stopPrank();
 
         vm.startPrank(avalonUSDTVault);
         mockUSDT.mint(avalonUSDTVault, borrowAmount);
@@ -643,6 +696,13 @@ contract PoolManagerTest is Test {
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
 
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.claimBTC(supplyAmount / 4);
+        poolManager.unpause();
+        vm.stopPrank();
+
         vm.startPrank(avalonUSDTVault);
         mockUSDT.mint(avalonUSDTVault, borrowAmount);
         mockUSDT.approve(address(poolManager), borrowAmount);
@@ -765,7 +825,7 @@ contract PoolManagerTest is Test {
         uint256 protocolProfit = 1000 ether;
         vm.store(
             address(poolManager),
-            bytes32(uint256(0)),
+            bytes32(uint256(1)),
             bytes32(protocolProfit)
         );
 
@@ -775,6 +835,13 @@ contract PoolManagerTest is Test {
         uint256 newAdminBalance = mockUSDT.balanceOf(poolAdmin);
         assertEq(newAdminBalance, initialAdminBalance + protocolProfit);
         assertEq(poolManager.getProtocolProfitUnclaimed(), 0);
+        vm.stopPrank();
+
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.claimProtocolEarnings();
+        poolManager.unpause();
         vm.stopPrank();
     }
 }

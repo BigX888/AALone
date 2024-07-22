@@ -23,6 +23,47 @@ contract PoolManagerStorageTest is Test {
         vm.stopPrank();
     }
 
+    function testPause() public {
+        vm.startPrank(admin);
+        poolManagerConfigurator.setEmergencyController(admin);
+        vm.stopPrank();
+
+        assertEq(poolManagerConfigurator.paused(), false);
+
+        vm.startPrank(admin);
+        poolManagerConfigurator.pause();
+        vm.stopPrank();
+        assertEq(poolManagerConfigurator.paused(), true);
+    }
+
+    function testUnpause() public {
+        vm.startPrank(admin);
+        poolManagerConfigurator.setEmergencyController(admin);
+        vm.stopPrank();
+
+        assertEq(poolManagerConfigurator.paused(), false);
+
+        vm.startPrank(admin);
+        poolManagerConfigurator.pause();
+        assertEq(poolManagerConfigurator.paused(), true);
+        poolManagerConfigurator.unpause();
+        assertEq(poolManagerConfigurator.paused(), false);
+        vm.stopPrank();
+    }
+
+    function testSetEmergencyController() public {
+        assertEq(poolManagerConfigurator.getEmergencyController(), address(0));
+
+        vm.prank(address(1));
+        vm.expectRevert();
+        poolManagerConfigurator.setEmergencyController(address(1));
+
+        vm.startPrank(admin);
+        poolManagerConfigurator.setEmergencyController(address(1));
+        vm.stopPrank();
+        assertEq(poolManagerConfigurator.getEmergencyController(), address(1));
+    }
+
     function testSetPoolManagerConfig() public {
         vm.startPrank(admin);
         DataTypes.PoolManagerConfig memory config = DataTypes

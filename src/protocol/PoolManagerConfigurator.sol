@@ -3,17 +3,30 @@ pragma solidity ^0.8.13;
 
 import "./PoolManagerStorage.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 /**
  * @title PoolManagerConfigurator
  * @dev Contract for configuring and managing pool settings and user-specific configurations.
  */
-contract PoolManagerConfigurator is PoolManagerStorage, OwnableUpgradeable {
+contract PoolManagerConfigurator is
+    PoolManagerStorage,
+    OwnableUpgradeable,
+    PausableUpgradeable
+{
     /**
      * @dev Modifier to check if the user's pool is initialized.
      */
     modifier onlyInitializedPool() {
         require(_userPoolConfig[msg.sender].init, "Pool not initialized");
+        _;
+    }
+
+    modifier onlyEmergencyController() {
+        require(
+            msg.sender == _emergencyController,
+            "caller is not emergencyController"
+        );
         _;
     }
 
@@ -23,18 +36,27 @@ contract PoolManagerConfigurator is PoolManagerStorage, OwnableUpgradeable {
      */
     function initialize(address owner) public initializer {
         __Ownable_init(owner);
+        __Pausable_init();
     }
 
-    /**
-     * @dev Sets the configuration for the pool manager.
-     * @param configInput The configuration data for the pool manager.
-     * Requirements:
-     * - The caller must be the owner of the contract.
-     */
+    function pause() external onlyEmergencyController {
+        _pause();
+    }
+
+    function unpause() external onlyEmergencyController {
+        _unpause();
+    }
+
     function setPoolManagerConfig(
         DataTypes.PoolManagerConfig calldata configInput
     ) external onlyOwner {
         _poolManagerConfig = configInput;
+    }
+
+    function setEmergencyController(
+        address emergencyController
+    ) external onlyOwner {
+        _emergencyController = emergencyController;
     }
 
     /**
@@ -81,6 +103,10 @@ contract PoolManagerConfigurator is PoolManagerStorage, OwnableUpgradeable {
      */
     function getProtocolProfitUnclaimed() external view returns (uint256) {
         return _protocolProfitUnclaimed;
+    }
+
+    function getEmergencyController() external view returns (address) {
+        return _emergencyController;
     }
 
     /**
