@@ -14,9 +14,8 @@ contract FBTCOracleTest is Test {
     function setUp() public {
         owner = address(this);
         otherAccount = address(0x123);
-
         aggregatorMock = new AggregatorMock();
-        fbtcOracle = new FBTCOracle(aggregatorMock, owner);
+        fbtcOracle = new FBTCOracle(aggregatorMock, owner, 3600);
     }
 
     function testInitialDeployment() public {
@@ -28,6 +27,21 @@ contract FBTCOracleTest is Test {
         AggregatorMock newAggregatorMock = new AggregatorMock();
         fbtcOracle.setAssetSource(newAggregatorMock);
         assertEq(fbtcOracle.getAssetPrice(), 0);
+    }
+
+    function testSetExpiredTime() public {
+        assertEq(fbtcOracle.getExpiredTime(), 3600);
+        fbtcOracle.setExpiredTime(100);
+        assertEq(fbtcOracle.getExpiredTime(), 100);
+    }
+
+    function testGetAssetPrice_Failed() public {
+        int256 newPrice = 20000 * 10 ** 8;
+        aggregatorMock.setLatestAnswer(newPrice);
+        assertEq(fbtcOracle.getAssetPrice(), uint256(newPrice));
+        skip(365 days);
+        vm.expectRevert("price expired");
+        fbtcOracle.getAssetPrice();
     }
 
     function testGetAssetPrice() public {

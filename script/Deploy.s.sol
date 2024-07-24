@@ -35,7 +35,11 @@ contract DeployMyContract is Script {
 
         // Deploy FBTCOracle
         vm.startBroadcast();
-        FBTCOracle fbtcOracle = new FBTCOracle(mockAggregator, initialOwner);
+        FBTCOracle fbtcOracle = new FBTCOracle(
+            mockAggregator,
+            initialOwner,
+            3600
+        );
         console.log("FBTCOracle deployed at:", address(fbtcOracle));
         console.log("BTC Price set", fbtcOracle.getAssetPrice());
         console.log("Oracle decimal", fbtcOracle.decimals());
@@ -44,9 +48,9 @@ contract DeployMyContract is Script {
         DataTypes.PoolManagerConfig memory poolManagerConfig = DataTypes
             .PoolManagerConfig({
                 DEFAULT_LIQUIDATION_THRESHOLD: 9000,
-                DEFAULT_POOL_INTEREST_RATE: 1000,
+                DEFAULT_POOL_INTEREST_RATE: 800,
                 DEFAULT_LTV: 7500,
-                PROTOCOL_FEE_INTEREST_RATE: 100,
+                DEFAULT_PROTOCOLL_INTEREST_RATE: 200,
                 USDT: usdt,
                 FBTC0: IERC20(fbtc0Address),
                 FBTC1: IFBTC1(fbtc1Address),
@@ -74,6 +78,9 @@ contract DeployMyContract is Script {
 
         PoolManager(address(proxy)).setPoolManagerConfig(poolManagerConfig);
         console.log("Proxy setConfig success");
+
+        PoolManager(address(proxy)).setEmergencyController(initialOwner);
+        console.log("Proxy setEmergencyController success");
         vm.stopBroadcast();
     }
 }

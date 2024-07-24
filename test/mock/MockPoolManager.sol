@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
-import "./PoolManagerConfigurator.sol";
-import "./library/math/MathUtils.sol";
-import "./library/math/WadRayMath.sol";
-import "../interfaces/IPoolManager.sol";
+import "../../src/protocol/PoolManagerConfigurator.sol";
+import "../../src/protocol/library/math/MathUtils.sol";
+import "../../src/protocol/library/math/WadRayMath.sol";
+import "../../src/interfaces/IPoolManager.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
  * @title PoolManager
  * @dev Manages liquidity pools and related operations.
  */
-contract PoolManager is PoolManagerConfigurator, IPoolManager {
+contract MockPoolManager is PoolManagerConfigurator, IPoolManager {
     using WadRayMath for uint256;
     using MathUtils for uint256;
     using SafeERC20 for IERC20;
@@ -312,7 +312,6 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
         uint256 claimAmount = poolManagerConfig.USDT.balanceOf(address(this));
         poolManagerConfig.USDT.safeTransfer(msg.sender, claimAmount);
         _protocolProfitUnclaimed -= claimAmount;
-        emit ProtocolEarningsClaimed(msg.sender, claimAmount);
     }
 
     /**
@@ -338,16 +337,6 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
         emit RequestMintFBTC0(amount, depositTxid, outputIndex);
     }
 
-    /**
-     * @dev Updates the configuration of a specific user's pool.
-     * @param user The address of the user whose pool configuration is being updated.
-     * @param poolInterestRate The new pool interest rate to set.
-     * @param protocolInterestRate The new protocol interest rate to set.
-     * @param loanToValue The new loan-to-value ratio to set.
-     * @param liquidationThreshold The new liquidation threshold to set.
-     * @notice This function can only be called by the contract owner when the contract is not paused.
-     * @notice The pool must have been initialized for the specified user.
-     */
     function setUserPoolConfig(
         address user,
         uint256 poolInterestRate,
@@ -375,7 +364,7 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
      * @dev Updates the user's debt.
      * @param user The address of the user.
      */
-    function updateState(address user) internal {
+    function updateState(address user) public {
         // Load the user's pool configuration into memory
         DataTypes.UserPoolConfig memory userPoolConfig = _userPoolConfig[user];
         // Load the user's pool reserve information into storage
@@ -447,11 +436,16 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
             feeForProtocol;
     }
 
-    /**
-     * @dev Retrieves the current reserve information for the entire pool manager.
-     * @notice This function aggregates data from all user pools and the global pool manager state.
-     * @return poolManagerReserveInfor A struct containing the aggregated reserve information.
-     */
+    function getUserPoolReserveInformationWithoutAddDebt(
+        address user
+    )
+        external
+        view
+        returns (DataTypes.UserPoolReserveInformation memory reserve)
+    {
+        return _userPoolReserveInformation[user];
+    }
+
     function getPoolManagerReserveInformation()
         external
         view
@@ -474,6 +468,14 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
             .claimableUSDT;
         poolManagerReserveInfor.claimableBTC = _poolManagerReserveInformation
             .claimableBTC;
+    }
+
+    function getPoolManagerReserveInformationWithoutAddDebt()
+        external
+        view
+        returns (DataTypes.PoolManagerReserveInformation memory)
+    {
+        return _poolManagerReserveInformation;
     }
 
     /**
@@ -559,5 +561,9 @@ contract PoolManager is PoolManagerConfigurator, IPoolManager {
                     DENOMINATOR) /
                 (FBTC0Price * liquidationThreshold);
         }
+    }
+
+    function getUserList() public view returns (address[] memory) {
+        return _userList;
     }
 }

@@ -8,6 +8,7 @@ import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 /**
  * @title PoolManagerConfigurator
  * @dev Contract for configuring and managing pool settings and user-specific configurations.
+ * @notice This contract inherits from PoolManagerStorage, OwnableUpgradeable, and PausableUpgradeable.
  */
 contract PoolManagerConfigurator is
     PoolManagerStorage,
@@ -22,6 +23,9 @@ contract PoolManagerConfigurator is
         _;
     }
 
+    /**
+     * @dev Modifier to restrict access to the emergency controller.
+     */
     modifier onlyEmergencyController() {
         require(
             msg.sender == _emergencyController,
@@ -39,38 +43,38 @@ contract PoolManagerConfigurator is
         __Pausable_init();
     }
 
+    /**
+     * @dev Pauses the contract. Can only be called by the emergency controller.
+     */
     function pause() external onlyEmergencyController {
         _pause();
     }
 
+    /**
+     * @dev Unpauses the contract. Can only be called by the emergency controller.
+     */
     function unpause() external onlyEmergencyController {
         _unpause();
     }
 
+    /**
+     * @dev Sets the pool manager configuration. Can only be called by the owner.
+     * @param configInput The new configuration to set.
+     */
     function setPoolManagerConfig(
         DataTypes.PoolManagerConfig calldata configInput
     ) external onlyOwner {
         _poolManagerConfig = configInput;
     }
 
+    /**
+     * @dev Sets the emergency controller address. Can only be called by the owner.
+     * @param emergencyController The address of the new emergency controller.
+     */
     function setEmergencyController(
         address emergencyController
     ) external onlyOwner {
         _emergencyController = emergencyController;
-    }
-
-    /**
-     * @dev Sets the configuration for a user's pool.
-     * @param user The address of the user.
-     * @param configInput The configuration data for the user's pool.
-     * Requirements:
-     * - The caller must be the owner of the contract.
-     */
-    function setUserPoolConfig(
-        address user,
-        DataTypes.UserPoolConfig calldata configInput
-    ) external virtual onlyOwner {
-        _userPoolConfig[user] = configInput;
     }
 
     /**
@@ -86,18 +90,6 @@ contract PoolManagerConfigurator is
     }
 
     /**
-     * @dev Returns the pool manager reserve information.
-     * @return The pool manager reserve information as a `DataTypes.PoolManagerReserveInformation` struct.
-     */
-    function getPoolManagerReserveInformation()
-        external
-        view
-        returns (DataTypes.PoolManagerReserveInformation memory)
-    {
-        return _poolManagerReserveInformation;
-    }
-
-    /**
      * @dev Returns the unclaimed protocol profit.
      * @return The amount of unclaimed protocol profit as a uint256.
      */
@@ -105,6 +97,10 @@ contract PoolManagerConfigurator is
         return _protocolProfitUnclaimed;
     }
 
+    /**
+     * @dev Returns the address of the emergency controller.
+     * @return The address of the emergency controller.
+     */
     function getEmergencyController() external view returns (address) {
         return _emergencyController;
     }
@@ -126,21 +122,5 @@ contract PoolManagerConfigurator is
         address user
     ) external view returns (DataTypes.UserPoolConfig memory) {
         return _userPoolConfig[user];
-    }
-
-    /**
-     * @dev Returns the reserve information of a user's pool.
-     * @param user The address of the user.
-     * @return The user's pool reserve information as a `DataTypes.UserPoolReserveInformation` struct.
-     */
-    function getUserPoolReserveInformation(
-        address user
-    )
-        external
-        view
-        virtual
-        returns (DataTypes.UserPoolReserveInformation memory)
-    {
-        return _userPoolReserveInformation[user];
     }
 }

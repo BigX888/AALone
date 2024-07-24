@@ -3,43 +3,55 @@ pragma solidity ^0.8.0;
 
 import "../../src/interfaces/IOracle.sol";
 
-contract AggregatorMock is AggregatorInterface {
+contract AggregatorMock is AggregatorV3Interface {
+    uint8 private _decimals;
     int256 private _latestAnswer;
-    uint256 private _latestTimestamp;
-    uint256 private _latestRound;
+    uint256 private _latestUpdatedAt;
 
-    function setLatestAnswer(int256 answer) external {
-        _latestAnswer = answer;
-        _latestTimestamp = block.timestamp;
-        _latestRound++;
-        emit AnswerUpdated(answer, _latestRound, block.timestamp);
-    }
-
-    function decimals() external view override returns (uint8) {
+    function decimals() external view returns (uint8) {
         return 8;
     }
 
-    function latestAnswer() external view override returns (int256) {
-        return _latestAnswer;
+    function description() external view returns (string memory) {
+        return "ChainlinkMock";
     }
 
-    function latestTimestamp() external view override returns (uint256) {
-        return _latestTimestamp;
+    function version() external view returns (uint256) {
+        return 1;
     }
 
-    function latestRound() external view override returns (uint256) {
-        return _latestRound;
+    function latestRoundData()
+        external
+        view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
+    {
+        return (0, _latestAnswer, 0, _latestUpdatedAt, 0);
     }
 
-    function getAnswer(
-        uint256 roundId
-    ) external view override returns (int256) {
-        return _latestAnswer; // Simplification for mock
+    function getRoundData(
+        uint80 _roundId
+    )
+        external
+        view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
+    {
+        revert("unused");
     }
 
-    function getTimestamp(
-        uint256 roundId
-    ) external view override returns (uint256) {
-        return _latestTimestamp; // Simplification for mock
+    function setLatestAnswer(int256 answer) external {
+        _latestAnswer = answer;
+        _latestUpdatedAt = block.timestamp;
     }
 }

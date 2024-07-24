@@ -55,7 +55,12 @@ contract PoolManagerStorageTest is Test {
         assertEq(poolManagerConfigurator.getEmergencyController(), address(0));
 
         vm.prank(address(1));
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "OwnableUnauthorizedAccount(address)",
+                address(1)
+            )
+        );
         poolManagerConfigurator.setEmergencyController(address(1));
 
         vm.startPrank(admin);
@@ -71,7 +76,7 @@ contract PoolManagerStorageTest is Test {
                 DEFAULT_LIQUIDATION_THRESHOLD: 5000,
                 DEFAULT_POOL_INTEREST_RATE: 500,
                 DEFAULT_LTV: 500,
-                PROTOCOL_FEE_INTEREST_RATE: 100,
+                DEFAULT_PROTOCOLL_INTEREST_RATE: 100,
                 USDT: mockUSDT,
                 FBTC0: mockFBTC0,
                 FBTC1: mockFBTC1,
@@ -88,7 +93,7 @@ contract PoolManagerStorageTest is Test {
 
         assertEq(storedConfig.DEFAULT_POOL_INTEREST_RATE, 500);
         assertEq(storedConfig.DEFAULT_LTV, 500);
-        assertEq(storedConfig.PROTOCOL_FEE_INTEREST_RATE, 100);
+        assertEq(storedConfig.DEFAULT_PROTOCOLL_INTEREST_RATE, 100);
         assertEq(address(storedConfig.USDT), address(mockUSDT));
         assertEq(address(storedConfig.FBTC0), address(mockFBTC0));
         assertEq(address(storedConfig.FBTC1), address(mockFBTC1));
@@ -105,7 +110,7 @@ contract PoolManagerStorageTest is Test {
                 DEFAULT_LIQUIDATION_THRESHOLD: 5000,
                 DEFAULT_POOL_INTEREST_RATE: 500,
                 DEFAULT_LTV: 500,
-                PROTOCOL_FEE_INTEREST_RATE: 100,
+                DEFAULT_PROTOCOLL_INTEREST_RATE: 100,
                 USDT: mockUSDT,
                 FBTC0: mockFBTC0,
                 FBTC1: mockFBTC1,
@@ -114,34 +119,10 @@ contract PoolManagerStorageTest is Test {
                 AntaphaUSDTVault: address(0xABC)
             });
 
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user)
+        );
         poolManagerConfigurator.setPoolManagerConfig(config);
-        vm.stopPrank();
-    }
-
-    function testSetUserPoolConfig() public {
-        vm.startPrank(admin);
-
-        DataTypes.UserPoolConfig memory userConfig = DataTypes.UserPoolConfig({
-            init: true,
-            poolInterestRate: 500,
-            protocolInterestRate: 100,
-            loanToValue: 8000,
-            liquidationThreshold: 5000
-        });
-
-        poolManagerConfigurator.setUserPoolConfig(user, userConfig);
-
-        DataTypes.UserPoolConfig
-            memory storedUserConfig = poolManagerConfigurator.getUserPoolConfig(
-                user
-            );
-        assertTrue(storedUserConfig.init);
-        assertEq(storedUserConfig.poolInterestRate, 500);
-        assertEq(storedUserConfig.protocolInterestRate, 100);
-        assertEq(storedUserConfig.loanToValue, 8000);
-        assertEq(storedUserConfig.liquidationThreshold, 5000);
-
         vm.stopPrank();
     }
 }

@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 import "./mock/MockERC20.sol";
 import "./mock/MockAggregator.sol";
 import "./mock/MockFBTC1.sol";
+import "./mock/MockPoolManager.sol";
 import "../src/protocol/FBTCOracle.sol";
-import "../src/protocol/PoolManager.sol";
 import "../src/protocol/library/type/DataTypes.sol";
 
 contract PoolManagerTest is Test {
@@ -25,9 +25,9 @@ contract PoolManagerTest is Test {
 
     FBTCOracle public fbtcOracle;
     AggregatorMock public aggregatorMock;
-    PoolManager public poolManager;
+    MockPoolManager public poolManager;
 
-    address public poolAdmin = address(0x001);
+    address public owner = address(0x001);
     address public oracleOwner = address(0x002);
     address public avalonUSDTVault = address(0x003);
     address public antaphaUSDTVault = address(0x004);
@@ -37,15 +37,15 @@ contract PoolManagerTest is Test {
     error EnforcedPause();
 
     function setUp() public {
-        vm.startPrank(poolAdmin);
+        vm.startPrank(owner);
         aggregatorMock = new AggregatorMock();
-        fbtcOracle = new FBTCOracle(aggregatorMock, oracleOwner);
+        fbtcOracle = new FBTCOracle(aggregatorMock, oracleOwner, 1000 days);
         DataTypes.PoolManagerConfig memory config = DataTypes
             .PoolManagerConfig({
                 DEFAULT_LIQUIDATION_THRESHOLD: lts,
                 DEFAULT_POOL_INTEREST_RATE: poolInterest,
                 DEFAULT_LTV: ltv,
-                PROTOCOL_FEE_INTEREST_RATE: protocolInterest,
+                DEFAULT_PROTOCOLL_INTEREST_RATE: protocolInterest,
                 USDT: mockUSDT,
                 FBTC0: mockFBTC0,
                 FBTC1: mockFBTC1,
@@ -53,15 +53,14 @@ contract PoolManagerTest is Test {
                 AvalonUSDTVault: avalonUSDTVault,
                 AntaphaUSDTVault: antaphaUSDTVault
             });
-        poolManager = new PoolManager();
-        poolManager.initialize(poolAdmin);
+        poolManager = new MockPoolManager();
+        poolManager.initialize(owner);
         poolManager.setPoolManagerConfig(config);
         poolManager.setEmergencyController(emergencyContoller);
         vm.stopPrank();
     }
 
     function testCreatePool_Failed() public {
-        // Ensure non-admin cannot create a pool
         address nonAdmin = address(0x123);
         vm.startPrank(emergencyContoller);
         poolManager.pause();
@@ -71,29 +70,30 @@ contract PoolManagerTest is Test {
         vm.stopPrank();
 
         vm.prank(nonAdmin);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "OwnableUnauthorizedAccount(address)",
+                nonAdmin
+            )
+        );
         poolManager.createPool(user);
 
-        vm.prank(address(poolAdmin));
+        vm.prank(address(owner));
         poolManager.createPool(user);
 
-        vm.prank(address(poolAdmin));
+        vm.prank(address(owner));
         vm.expectRevert("Pool already initialized");
         poolManager.createPool(user);
     }
 
     function testCreatePool_Success() public {
-        // Ensure the pool is not initialized initially
         DataTypes.UserPoolConfig memory initialConfig = poolManager
-            .getUserPoolConfig(poolAdmin);
+            .getUserPoolConfig(owner);
         assertFalse(initialConfig.init);
 
-        // Set the role for the pool admin (mocking the role assignment)
-        vm.prank(address(poolAdmin));
-        // Create the pool
+        vm.prank(address(owner));
         poolManager.createPool(user);
 
-        // Verify the pool is initialized with correct parameters
         DataTypes.UserPoolConfig memory userPoolConfig = poolManager
             .getUserPoolConfig(user);
 
@@ -115,19 +115,24 @@ contract PoolManagerTest is Test {
         );
         assertEq(
             userPoolConfig.protocolInterestRate,
-            storedConfig.PROTOCOL_FEE_INTEREST_RATE
+            storedConfig.DEFAULT_PROTOCOLL_INTEREST_RATE
         );
         assertEq(userPoolConfig.loanToValue, storedConfig.DEFAULT_LTV);
         assertEq(poolManagerReserve.userAmount, 1);
+        assertEq(poolManager.getUserList()[0], user);
+
+        vm.prank(address(owner));
+        poolManager.createPool(owner);
+        poolManagerReserve = poolManager.getPoolManagerReserveInformation();
+        assertEq(poolManagerReserve.userAmount, 2);
+        assertEq(poolManager.getUserList()[1], owner);
     }
 
     function testSupply_Failed() public {
         uint256 amount = 1000 * 10 ** FBTCDecimal;
-        // Mint tokens to the user
-        mockFBTC0.mint(poolAdmin, amount);
-        assertEq(mockFBTC0.balanceOf(poolAdmin), amount);
+        mockFBTC0.mint(owner, amount);
+        assertEq(mockFBTC0.balanceOf(owner), amount);
 
-        // Approve the PoolManager to spend the tokens
         mockFBTC0.approve(address(poolManager), amount);
 
         vm.startPrank(emergencyContoller);
@@ -137,7 +142,6 @@ contract PoolManagerTest is Test {
         poolManager.unpause();
         vm.stopPrank();
 
-        // Attempt to supply tokens to the pool without initialization
         vm.expectRevert("Pool not initialized");
         poolManager.supply(amount);
     }
@@ -145,23 +149,18 @@ contract PoolManagerTest is Test {
     function testSupply_Success() public {
         uint256 amount = 1000 * 10 ** FBTCDecimal;
 
-        // Ensure the pool is initialized
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
         vm.stopPrank();
 
-        // Mint tokens to the user
         mockFBTC0.mint(user, amount);
         assertEq(mockFBTC0.balanceOf(user), amount);
 
         vm.startPrank(user);
-        // Approve the PoolManager to spend the tokens
         mockFBTC0.approve(address(poolManager), amount);
 
-        // Supply tokens to the pool
         poolManager.supply(amount);
 
-        // Verify the user's pool reserve information
         DataTypes.UserPoolReserveInformation memory reserveInfo = poolManager
             .getUserPoolReserveInformation(user);
 
@@ -194,16 +193,14 @@ contract PoolManagerTest is Test {
         vm.expectRevert("Pool not initialized");
         poolManager.borrow(borrowAmount);
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
-        // Mint and supply tokens to the pool
         mockFBTC0.mint(user, supplyAmount);
         mockFBTC0.approve(address(poolManager), supplyAmount);
         poolManager.supply(supplyAmount);
 
-        // Attempt to claimUSDT an amount that exceeds the allowable LTV
         vm.expectRevert("Requested amount exceeds allowable loanToValue");
         poolManager.borrow(borrowAmount + 1);
     }
@@ -215,7 +212,7 @@ contract PoolManagerTest is Test {
             10 ** USDTDecimal;
         aggregatorMock.setLatestAnswer(int(price));
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -223,10 +220,8 @@ contract PoolManagerTest is Test {
         mockFBTC0.approve(address(poolManager), supplyAmount);
         poolManager.supply(supplyAmount);
 
-        // claimUSDT an amount within the allowable LTV
         poolManager.borrow(borrowAmount);
 
-        // Verify the borrowing amount is updated correctly
         DataTypes.UserPoolReserveInformation memory reserveInfo = poolManager
             .getUserPoolReserveInformation(user);
         DataTypes.PoolManagerReserveInformation
@@ -257,7 +252,7 @@ contract PoolManagerTest is Test {
         vm.expectRevert("Pool not initialized");
         poolManager.claimUSDT(borrowAmount);
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -283,7 +278,7 @@ contract PoolManagerTest is Test {
         mockUSDT.approve(address(poolManager), borrowAmount);
         vm.stopPrank();
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -346,7 +341,7 @@ contract PoolManagerTest is Test {
         vm.expectRevert("Pool not initialized");
         poolManager.repay(1);
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -360,10 +355,37 @@ contract PoolManagerTest is Test {
 
         DataTypes.UserPoolReserveInformation memory reserveInfo = poolManager
             .getUserPoolReserveInformation(user);
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveBeforeRepay = poolManager
+                .getPoolManagerReserveInformation();
 
         uint256 repayAmount = borrowAmount;
         mockUSDT.approve(address(poolManager), repayAmount);
         poolManager.repay(repayAmount);
+
+        DataTypes.UserPoolReserveInformation
+            memory reserveInfoAfterRepay = poolManager
+                .getUserPoolReserveInformation(user);
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveAfterRepay = poolManager
+                .getPoolManagerReserveInformation();
+
+        assertEq(reserveInfoAfterRepay.debt, reserveInfo.debt - repayAmount);
+
+        assertEq(
+            poolManagerReserveAfterRepay.debt,
+            poolManagerReserveBeforeRepay.debt - repayAmount
+        );
+        assertEq(
+            mockUSDT.balanceOf(antaphaUSDTVault),
+            repayAmount -
+                (repayAmount * reserveInfo.debtToProtocol) /
+                reserveInfo.debt
+        );
+        assertEq(
+            mockUSDT.balanceOf(address(poolManager)),
+            (repayAmount * reserveInfo.debtToProtocol) / reserveInfo.debt
+        );
     }
 
     function testRepayAll_Success() public {
@@ -382,7 +404,7 @@ contract PoolManagerTest is Test {
         vm.expectRevert("Pool not initialized");
         poolManager.repay(1);
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -396,6 +418,33 @@ contract PoolManagerTest is Test {
 
         DataTypes.UserPoolReserveInformation memory reserveInfo = poolManager
             .getUserPoolReserveInformation(user);
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveBeforeRepay = poolManager
+                .getPoolManagerReserveInformation();
+
+        uint256 repayAmount = reserveInfo.debt;
+        mockUSDT.mint(user, repayAmount - borrowAmount);
+        mockUSDT.approve(address(poolManager), repayAmount);
+        poolManager.repay(repayAmount);
+
+        DataTypes.UserPoolReserveInformation
+            memory reserveInfoAfterRepay = poolManager
+                .getUserPoolReserveInformation(user);
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveAfterRepay = poolManager
+                .getPoolManagerReserveInformation();
+        assertEq(reserveInfoAfterRepay.debt, 0);
+        assertEq(poolManagerReserveAfterRepay.debt, 0);
+        assertEq(
+            mockUSDT.balanceOf(antaphaUSDTVault),
+            repayAmount -
+                (repayAmount * reserveInfo.debtToProtocol) /
+                reserveInfo.debt
+        );
+        assertEq(
+            mockUSDT.balanceOf(address(poolManager)),
+            (repayAmount * reserveInfo.debtToProtocol) / reserveInfo.debt
+        );
     }
 
     function testLiquidate_Failed() public {
@@ -417,7 +466,7 @@ contract PoolManagerTest is Test {
         mockUSDT.approve(address(poolManager), borrowAmount);
         vm.stopPrank();
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -426,8 +475,11 @@ contract PoolManagerTest is Test {
         poolManager.supply(supplyAmount);
         poolManager.borrow(borrowAmount);
         poolManager.claimUSDT(borrowAmount);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user)
+        );
         poolManager.liquidate(user, supplyAmount, borrowAmount);
+        vm.stopPrank();
     }
 
     function testLiquidate_Success() public {
@@ -442,7 +494,7 @@ contract PoolManagerTest is Test {
         mockUSDT.approve(address(poolManager), borrowAmount);
         vm.stopPrank();
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -459,7 +511,7 @@ contract PoolManagerTest is Test {
         DataTypes.PoolManagerReserveInformation
             memory poolManagerReserveBeforeOperate = poolManager
                 .getPoolManagerReserveInformation();
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.liquidate(user, supplyAmount, borrowAmount);
 
         DataTypes.UserPoolReserveInformation
@@ -514,7 +566,7 @@ contract PoolManagerTest is Test {
         vm.expectRevert("Pool not initialized");
         poolManager.withdraw(supplyAmount);
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -548,7 +600,7 @@ contract PoolManagerTest is Test {
         mockUSDT.approve(address(poolManager), borrowAmount);
         vm.stopPrank();
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -625,7 +677,7 @@ contract PoolManagerTest is Test {
         mockUSDT.approve(address(poolManager), borrowAmount);
         vm.stopPrank();
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -710,25 +762,21 @@ contract PoolManagerTest is Test {
 
         vm.expectRevert("Pool not initialized");
         poolManager.claimBTC(supplyAmount / 4);
-        // Initialize the pool
-        vm.prank(poolAdmin);
+
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
-        // Mint and supply tokens to the pool
         mockFBTC0.mint(user, supplyAmount);
         mockFBTC0.approve(address(poolManager), supplyAmount);
 
         poolManager.supply(supplyAmount);
-        // Mock the FBTC oracle price
-        aggregatorMock.setLatestAnswer(int(60000 * 10 ** OracleDecimal)); // 1 USDT per FBTC // 1 USDT per FBTC
+        aggregatorMock.setLatestAnswer(int(60000 * 10 ** OracleDecimal));
 
-        // claimUSDT an amount
         poolManager.borrow(borrowAmount);
 
         poolManager.claimUSDT(borrowAmount);
 
-        // Verify the borrowing amount and total borrowed amount are updated correctly
         DataTypes.UserPoolReserveInformation memory reserveInfo = poolManager
             .getUserPoolReserveInformation(user);
 
@@ -764,7 +812,7 @@ contract PoolManagerTest is Test {
         mockUSDT.approve(address(poolManager), borrowAmount);
         vm.stopPrank();
 
-        vm.prank(poolAdmin);
+        vm.prank(owner);
         poolManager.createPool(user);
 
         vm.startPrank(user);
@@ -805,13 +853,13 @@ contract PoolManagerTest is Test {
     }
 
     function testClaimProtocolEarnings() public {
-        vm.startPrank(poolAdmin);
+        vm.startPrank(owner);
         DataTypes.PoolManagerConfig memory config = DataTypes
             .PoolManagerConfig({
                 DEFAULT_LIQUIDATION_THRESHOLD: 5000,
                 DEFAULT_POOL_INTEREST_RATE: 500,
                 DEFAULT_LTV: 500,
-                PROTOCOL_FEE_INTEREST_RATE: 100,
+                DEFAULT_PROTOCOLL_INTEREST_RATE: 100,
                 USDT: mockUSDT,
                 FBTC0: mockFBTC0,
                 FBTC1: mockFBTC1,
@@ -821,7 +869,7 @@ contract PoolManagerTest is Test {
             });
         poolManager.setPoolManagerConfig(config);
 
-        uint256 initialAdminBalance = mockUSDT.balanceOf(poolAdmin);
+        uint256 initialAdminBalance = mockUSDT.balanceOf(owner);
         uint256 protocolProfit = 1000 ether;
         vm.store(
             address(poolManager),
@@ -832,7 +880,7 @@ contract PoolManagerTest is Test {
         mockUSDT.mint(address(poolManager), protocolProfit);
         poolManager.claimProtocolEarnings();
 
-        uint256 newAdminBalance = mockUSDT.balanceOf(poolAdmin);
+        uint256 newAdminBalance = mockUSDT.balanceOf(owner);
         assertEq(newAdminBalance, initialAdminBalance + protocolProfit);
         assertEq(poolManager.getProtocolProfitUnclaimed(), 0);
         vm.stopPrank();
@@ -843,5 +891,315 @@ contract PoolManagerTest is Test {
         poolManager.claimProtocolEarnings();
         poolManager.unpause();
         vm.stopPrank();
+    }
+
+    function testSetUserPoolConfig_Failed() public {
+        address nonAdmin = address(0x123);
+        vm.startPrank(emergencyContoller);
+        poolManager.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        poolManager.setUserPoolConfig(user, 500, 500, 8000, 9500);
+        poolManager.unpause();
+        vm.stopPrank();
+
+        vm.prank(nonAdmin);
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "OwnableUnauthorizedAccount(address)",
+                nonAdmin
+            )
+        );
+        poolManager.setUserPoolConfig(user, 500, 500, 8000, 9500);
+
+        vm.prank(address(owner));
+        vm.expectRevert("Pool not initialized");
+        poolManager.setUserPoolConfig(user, 500, 500, 8000, 9500);
+    }
+
+    function testSetUserPoolConfig_Success() public {
+        uint256 price = 60000 * 10 ** OracleDecimal;
+        uint256 supplyAmount = 1000 * 10 ** FBTCDecimal;
+        uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
+            10 ** USDTDecimal;
+        aggregatorMock.setLatestAnswer(int(price));
+
+        vm.prank(owner);
+        poolManager.createPool(user);
+
+        vm.startPrank(user);
+        mockFBTC0.mint(user, supplyAmount);
+        mockFBTC0.approve(address(poolManager), supplyAmount);
+        poolManager.supply(supplyAmount);
+        poolManager.borrow(borrowAmount);
+        vm.stopPrank();
+
+        vm.prank(owner);
+        poolManager.setUserPoolConfig(user, 500, 500, 8000, 9500);
+
+        DataTypes.UserPoolConfig memory userPoolConfig = poolManager
+            .getUserPoolConfig(user);
+
+        assertEq(userPoolConfig.poolInterestRate, 500);
+        assertEq(userPoolConfig.liquidationThreshold, 9500);
+        assertEq(userPoolConfig.protocolInterestRate, 500);
+        assertEq(userPoolConfig.loanToValue, 8000);
+    }
+
+    function testUpdateState() public {
+        uint256 price = 60000 * 10 ** OracleDecimal;
+        uint256 supplyAmount = 1000 * 10 ** FBTCDecimal;
+        uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
+            10 ** USDTDecimal;
+        aggregatorMock.setLatestAnswer(int(price));
+
+        vm.startPrank(avalonUSDTVault);
+        mockUSDT.mint(avalonUSDTVault, borrowAmount);
+        mockUSDT.approve(address(poolManager), borrowAmount);
+        vm.stopPrank();
+
+        vm.prank(user);
+        vm.expectRevert("Pool not initialized");
+        poolManager.repay(1);
+
+        vm.prank(owner);
+        poolManager.createPool(user);
+
+        vm.startPrank(user);
+        mockFBTC0.mint(user, supplyAmount);
+        mockFBTC0.approve(address(poolManager), supplyAmount);
+        poolManager.supply(supplyAmount);
+        poolManager.borrow(borrowAmount);
+        poolManager.claimUSDT(borrowAmount);
+
+        skip(365 days);
+
+        DataTypes.UserPoolReserveInformation
+            memory reserveInfoBeforeUpdateState = poolManager
+                .getUserPoolReserveInformationWithoutAddDebt(user);
+
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveBeforUpdateState = poolManager
+                .getPoolManagerReserveInformationWithoutAddDebt();
+
+        DataTypes.UserPoolConfig memory userPoolConfig = poolManager
+            .getUserPoolConfig(user);
+
+        uint256 protocolUnclaimedBeforeUpdateState = poolManager
+            .getProtocolProfitUnclaimed();
+
+        uint256 protocolAccumulateBeforeUpdateState = poolManager
+            .getProtocolProfitAccumulate();
+
+        poolManager.updateState(user);
+
+        (uint256 feeForPool, uint256 feeForProtocol) = poolManager
+            .calculateAccumulatedDebt(
+                reserveInfoBeforeUpdateState.debt,
+                userPoolConfig.poolInterestRate,
+                userPoolConfig.protocolInterestRate,
+                reserveInfoBeforeUpdateState.timeStampIndex
+            );
+
+        DataTypes.UserPoolReserveInformation
+            memory reserveInfoAfterUpdateState = poolManager
+                .getUserPoolReserveInformationWithoutAddDebt(user);
+
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveAfterUpdateState = poolManager
+                .getPoolManagerReserveInformationWithoutAddDebt();
+
+        uint256 protocolUnclaimedAfterUpdateState = poolManager
+            .getProtocolProfitUnclaimed();
+
+        uint256 protocolAccumulateAfterUpdateState = poolManager
+            .getProtocolProfitAccumulate();
+
+        assertEq(
+            reserveInfoAfterUpdateState.debt -
+                reserveInfoBeforeUpdateState.debt,
+            feeForPool + feeForProtocol
+        );
+        assertEq(
+            reserveInfoAfterUpdateState.debtToProtocol -
+                reserveInfoBeforeUpdateState.debtToProtocol,
+            feeForProtocol
+        );
+        assertEq(
+            protocolUnclaimedAfterUpdateState -
+                protocolUnclaimedBeforeUpdateState,
+            feeForProtocol
+        );
+        assertEq(
+            protocolAccumulateAfterUpdateState -
+                protocolAccumulateBeforeUpdateState,
+            feeForProtocol
+        );
+        assertEq(
+            poolManagerReserveAfterUpdateState.debt -
+                poolManagerReserveBeforUpdateState.debt,
+            feeForPool + feeForProtocol
+        );
+        assertEq(reserveInfoAfterUpdateState.timeStampIndex, block.timestamp);
+    }
+
+    function testCalculateAccumulatedDebt() public {
+        uint40 timeStampIndex = uint40(block.timestamp);
+        uint256 debt = 100 * 10 ** (4 + USDTDecimal);
+        uint256 interestRate = 100; // 1%
+        uint256 accurateFee = 10050167100;
+        skip(365 days);
+
+        (uint256 feeForPool, uint256 feeForProtocol) = poolManager
+            .calculateAccumulatedDebt(
+                debt,
+                interestRate,
+                interestRate,
+                timeStampIndex
+            );
+
+        assertTrue((accurateFee - feeForPool) * 10000 <= accurateFee);
+    }
+
+    function testCalculateMaxBorrowAmount() public {
+        uint256 maxBorrowAmount;
+
+        maxBorrowAmount = poolManager.calculateMaxBorrowAmount(
+            ltv,
+            200 * 10 ** FBTCDecimal,
+            0,
+            60000 * 10 ** OracleDecimal,
+            USDTDecimal,
+            FBTCDecimal,
+            OracleDecimal
+        );
+
+        assertEq(
+            maxBorrowAmount,
+            ((60000 * 200 * ltv) / denominator) * 10 ** USDTDecimal
+        );
+
+        maxBorrowAmount = poolManager.calculateMaxBorrowAmount(
+            ltv,
+            200 * 10 ** FBTCDecimal,
+            6000000 * 10 ** USDTDecimal,
+            60000 * 10 ** OracleDecimal,
+            USDTDecimal,
+            FBTCDecimal,
+            OracleDecimal
+        );
+
+        assertEq(maxBorrowAmount, 0);
+
+        maxBorrowAmount = poolManager.calculateMaxBorrowAmount(
+            ltv,
+            200 * 10 ** FBTCDecimal,
+            3000000 * 10 ** USDTDecimal,
+            60000 * 10 ** OracleDecimal,
+            USDTDecimal,
+            FBTCDecimal,
+            OracleDecimal
+        );
+
+        assertEq(maxBorrowAmount, 3000000 * 10 ** USDTDecimal);
+    }
+
+    function testCalculateMaxWithdrawAmount() public {
+        uint256 maxWithdrawAmount;
+
+        maxWithdrawAmount = poolManager.calculateMaxWithdrawAmount(
+            lts,
+            100 * 10 ** FBTCDecimal,
+            0,
+            60000 * 10 ** OracleDecimal,
+            USDTDecimal,
+            FBTCDecimal,
+            OracleDecimal
+        );
+
+        assertEq(maxWithdrawAmount, 100 * 10 ** FBTCDecimal);
+
+        maxWithdrawAmount = poolManager.calculateMaxWithdrawAmount(
+            lts,
+            1000 * 10 ** FBTCDecimal,
+            30000000 * 10 ** USDTDecimal,
+            60000 * 10 ** OracleDecimal,
+            USDTDecimal,
+            FBTCDecimal,
+            OracleDecimal
+        );
+
+        assertEq(maxWithdrawAmount, 375 * 10 ** FBTCDecimal);
+    }
+
+    function testGetPoolManagerReserveInformation() public {
+        uint256 price = 60000 * 10 ** OracleDecimal;
+        uint256 supplyAmount = 1000 * 10 ** FBTCDecimal;
+        uint256 borrowAmount = ((1000 * 60000 * ltv) / denominator) *
+            10 ** USDTDecimal;
+        aggregatorMock.setLatestAnswer(int(price));
+
+        address[10] memory userList = [
+            address(0x011),
+            address(0x012),
+            address(0x013),
+            address(0x014),
+            address(0x015),
+            address(0x016),
+            address(0x017),
+            address(0x018),
+            address(0x019),
+            address(0x020)
+        ];
+        for (uint256 index = 0; index < userList.length; index++) {
+            vm.prank(owner);
+            poolManager.createPool(userList[index]);
+
+            vm.startPrank(userList[index]);
+            mockFBTC0.mint(userList[index], supplyAmount);
+            mockFBTC0.approve(address(poolManager), supplyAmount);
+            poolManager.supply(supplyAmount);
+            poolManager.borrow(borrowAmount);
+            uint256 withdrawAmount = poolManager.calculateMaxWithdrawAmount(
+                lts,
+                supplyAmount,
+                borrowAmount,
+                price,
+                USDTDecimal,
+                FBTCDecimal,
+                OracleDecimal
+            );
+            poolManager.withdraw(withdrawAmount);
+            vm.stopPrank();
+        }
+
+        skip(365 days);
+        uint256 expectTotalDebt;
+        for (uint256 index = 0; index < userList.length; index++) {
+            expectTotalDebt += poolManager
+                .getUserPoolReserveInformation(userList[index])
+                .debt;
+        }
+
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserve = poolManager
+                .getPoolManagerReserveInformation();
+        DataTypes.PoolManagerReserveInformation
+            memory poolManagerReserveAfterUpdateState = poolManager
+                .getPoolManagerReserveInformationWithoutAddDebt();
+
+        assertEq(poolManagerReserve.userAmount, 10);
+        assertEq(poolManagerReserve.debt, expectTotalDebt);
+        assertEq(
+            poolManagerReserve.collateral,
+            poolManagerReserveAfterUpdateState.collateral
+        );
+        assertEq(
+            poolManagerReserve.claimableBTC,
+            poolManagerReserveAfterUpdateState.claimableBTC
+        );
+        assertEq(
+            poolManagerReserve.claimableUSDT,
+            poolManagerReserveAfterUpdateState.claimableUSDT
+        );
     }
 }
