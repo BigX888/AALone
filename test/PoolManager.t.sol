@@ -45,7 +45,7 @@ contract PoolManagerTest is Test {
                 DEFAULT_LIQUIDATION_THRESHOLD: lts,
                 DEFAULT_POOL_INTEREST_RATE: poolInterest,
                 DEFAULT_LTV: ltv,
-                DEFAULT_PROTOCOLL_INTEREST_RATE: protocolInterest,
+                DEFAULT_PROTOCOL_INTEREST_RATE: protocolInterest,
                 USDT: mockUSDT,
                 FBTC0: mockFBTC0,
                 FBTC1: mockFBTC1,
@@ -115,7 +115,7 @@ contract PoolManagerTest is Test {
         );
         assertEq(
             userPoolConfig.protocolInterestRate,
-            storedConfig.DEFAULT_PROTOCOLL_INTEREST_RATE
+            storedConfig.DEFAULT_PROTOCOL_INTEREST_RATE
         );
         assertEq(userPoolConfig.loanToValue, storedConfig.DEFAULT_LTV);
         assertEq(poolManagerReserve.userAmount, 1);
@@ -859,7 +859,7 @@ contract PoolManagerTest is Test {
                 DEFAULT_LIQUIDATION_THRESHOLD: 5000,
                 DEFAULT_POOL_INTEREST_RATE: 500,
                 DEFAULT_LTV: 500,
-                DEFAULT_PROTOCOLL_INTEREST_RATE: 100,
+                DEFAULT_PROTOCOL_INTEREST_RATE: 100,
                 USDT: mockUSDT,
                 FBTC0: mockFBTC0,
                 FBTC1: mockFBTC1,

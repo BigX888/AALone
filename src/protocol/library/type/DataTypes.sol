@@ -15,7 +15,7 @@ library DataTypes {
      * @param DEFAULT_LIQUIDATION_THRESHOLD Default maximum withdrawal rate (e.g., 50%).
      * @param DEFAULT_POOL_INTEREST_RATE Default interest rate (e.g., 5%).
      * @param DEFAULT_LTV Default loan-to-value ratio (e.g., 5%).
-     * @param DEFAULT_PROTOCOLL_INTEREST_RATE Protocol fee ratio.
+     * @param DEFAULT_PROTOCOL_INTEREST_RATE Protocol fee ratio.
      * @param USDT ERC20 USDT contract.
      * @param FBTC0 ERC20 FBTC0 contract.
      * @param FBTC1 Interface for the FBTC1 contract.
@@ -27,7 +27,7 @@ library DataTypes {
         uint256 DEFAULT_LTV;
         uint256 DEFAULT_LIQUIDATION_THRESHOLD;
         uint256 DEFAULT_POOL_INTEREST_RATE;
-        uint256 DEFAULT_PROTOCOLL_INTEREST_RATE;
+        uint256 DEFAULT_PROTOCOL_INTEREST_RATE;
         IERC20 USDT;
         IERC20 FBTC0;
         IFBTC1 FBTC1;

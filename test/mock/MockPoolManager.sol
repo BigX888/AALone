@@ -31,7 +31,7 @@ contract MockPoolManager is PoolManagerConfigurator, IPoolManager {
         userPoolConfig.poolInterestRate = poolManagerConfig
             .DEFAULT_POOL_INTEREST_RATE;
         userPoolConfig.protocolInterestRate = poolManagerConfig
-            .DEFAULT_PROTOCOLL_INTEREST_RATE;
+            .DEFAULT_PROTOCOL_INTEREST_RATE;
         userPoolConfig.liquidationThreshold = poolManagerConfig
             .DEFAULT_LIQUIDATION_THRESHOLD;
         userPoolConfig.loanToValue = poolManagerConfig.DEFAULT_LTV;
