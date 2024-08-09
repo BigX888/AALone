@@ -50,7 +50,7 @@ contract DeployMyContract is Script {
                 DEFAULT_LIQUIDATION_THRESHOLD: 9000,
                 DEFAULT_POOL_INTEREST_RATE: 800,
                 DEFAULT_LTV: 7500,
-                DEFAULT_PROTOCOLL_INTEREST_RATE: 200,
+                DEFAULT_PROTOCOL_INTEREST_RATE: 200,
                 USDT: usdt,
                 FBTC0: IERC20(fbtc0Address),
                 FBTC1: IFBTC1(fbtc1Address),
